@@ -119,11 +119,14 @@ def main(config_file, card_id):
         print('Error sending request to Bugzilla: {}'.format(error))
         return 1
 
-    print('Bug {} <{}> filed:'.format(
-        response['id'],
-        bug_url_tmpl.format(bugzilla_url_base, response['id']))
-    )
+    bug_id = response['id']
+    bug_url = bug_url_tmpl.format(bugzilla_url_base, bug_id)
+
+    print('Bug {} <{}> filed:'.format(bug_id, bug_url))
     print('    {}'.format(card_name))
+
+    card.set_description('{}\n\n{}'.format(bug_url, card.description))
+    print ('Card {} updated.'.format(card.short_url))
     return 0
 
 
