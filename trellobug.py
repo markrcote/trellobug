@@ -14,6 +14,7 @@ from urllib.request import (
 )
 
 from trello import TrelloClient
+from trello.exceptions import Unauthorized
 from trello.util import create_oauth_token
 
 
@@ -63,9 +64,15 @@ def query_option(config, section, option, desc, instructions):
             val = input()
 
         config.set(section, option, val)
+        return True
+
+    return False
 
 
 def generate_trello_oauth_tokens(config):
+    print('Press enter to generate.')
+    input()
+
     access_token = create_oauth_token(
         expiration='30days',
         key=config['trello']['api_key'],
@@ -73,71 +80,32 @@ def generate_trello_oauth_tokens(config):
         name='trello-to-bug',
         output=False,
     )
+
     for opt in ('oauth_token', 'oauth_token_secret'):
         config.set('trello', opt, access_token[opt])
 
-
-def check_config(config):
-    if 'bugzilla' not in config:
-        config.add_section('bugzilla')
-
-    if 'trello' not in config:
-        config.add_section('trello')
-
-    if 'url' not in config['bugzilla']:
-        print('Using the Bugzilla instance at {}'.format(DEFAULT_BUGZILLA_URL))
-
-    query_option(config, 'bugzilla', 'api_key', 'Bugzilla API key',
-                 'Please visit '
-                 'https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey to '
-                 'see your existing API keys or to generate a new one.')
-
-    query_option(config, 'trello', 'api_key', 'Trello API key',
-                 'You can see your API key at '
-                 'https://trello.com/1/appKey/generate in the top box.')
-
-    query_option(config, 'trello', 'api_secret', 'Trello API secret',
-                 'You can see your API secret at '
-                 'https://trello.com/app-key at the bottom under "OAuth".')
-
-    if ('oauth_token' not in config['trello'] or
-            'oauth_token_secret' not in config['trello']):
-        print('Trello OAuth tokens not found.')
-        print()
-        print('Press enter to generate.')
-        input()
-        generate_trello_oauth_tokens(config)
-        print('\n'.join(textwrap.wrap(
-            'Token generated.  It will expire in 30 days, after which this '
-            'script will generate a new one.')))
+    print('\n'.join(textwrap.wrap(
+        'Token generated.  It will expire in 30 days, after which this '
+        'script will generate a new one.')))
 
 
-def main(config_file, card_id):
-    if config_file is None:
-        for f in DEFAULT_CONFIG_FILES:
-            if os.path.exists(f):
-                config_file = f
-        else:
-            config_file = DEFAULT_CONFIG_FILES[0]
-
-    config = configparser.ConfigParser()
-    config.read(config_file)
-
-    if not check_config(config):
-        return 1
-
-    bz_config = config['bugzilla']
-    trello_config = config['trello']
-
-    trello = TrelloClient(
-        api_key=trello_config['api_key'],
-        api_secret=trello_config['api_secret'],
-        token=trello_config['oauth_token'],
-        token_secret=trello_config['oauth_token_secret']
+def get_trello(config):
+    return TrelloClient(
+        api_key=config['trello']['api_key'],
+        api_secret=config['trello']['api_secret'],
+        token=config['trello']['oauth_token'],
+        token_secret=config['trello']['oauth_token_secret']
     )
 
-    card = trello.get_card(card_id)
 
+def handle_expired_trello_tokens(config, config_file):
+    print('Trello OAuth token invalid or expired.')
+    generate_trello_oauth_tokens(config)
+    write_config(config, config_file)
+    return get_trello(config)
+
+
+def file_trello_bug(bz_config, card):
     card_name = card.name
     m = story_name_with_points.match(card_name)
 
@@ -180,13 +148,102 @@ def main(config_file, card_id):
         print('Error sending request to Bugzilla: {}'.format(error))
         return 1
 
-    bug_id = response['id']
-    bug_url = bug_url_tmpl.format(bugzilla_url_base, bug_id)
+    bug = {
+        'id': response['id'],
+        'url': bug_url_tmpl.format(bugzilla_url_base, response['id']),
+        'summary': card_name,
+    }
 
-    print('Bug {} <{}> filed:'.format(bug_id, bug_url))
-    print('    {}'.format(card_name))
+    return bug
 
-    card.set_description('{}\n\n{}'.format(bug_url, card.description))
+
+def write_config(config, config_file):
+    print('Saving changes to {}.'.format(config_file))
+
+    with open(config_file, 'w') as f:
+        config.write(f)
+
+    print()
+
+
+def load_config(config_file):
+    config = configparser.ConfigParser()
+    config.read(config_file)
+
+    if 'bugzilla' not in config:
+        config.add_section('bugzilla')
+
+    if 'trello' not in config:
+        config.add_section('trello')
+
+    if 'url' not in config['bugzilla']:
+        print('Using the Bugzilla instance at {}'.format(DEFAULT_BUGZILLA_URL))
+
+    changed = False
+
+    changed |= query_option(
+        config, 'bugzilla', 'api_key', 'Bugzilla API key',
+        'Please visit https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey '
+        'to see your existing API keys or to generate a new one.'
+    )
+
+    changed |= query_option(
+        config, 'trello', 'api_key', 'Trello API key',
+        'You can see your API key at https://trello.com/1/appKey/generate in '
+        'the top box.'
+    )
+
+    changed |= query_option(
+        config, 'trello', 'api_secret', 'Trello API secret',
+        'You can see your API secret at https://trello.com/app-key at the '
+        'bottom under "OAuth".'
+    )
+
+    if ('oauth_token' not in config['trello'] or
+            'oauth_token_secret' not in config['trello']):
+        generate_trello_oauth_tokens(config)
+        changed = True
+
+    if changed:
+        write_config(config, config_file)
+
+    return config
+
+
+def main(config_file, card_id):
+    if config_file is None:
+        for f in DEFAULT_CONFIG_FILES:
+            if os.path.exists(f):
+                config_file = f
+        else:
+            config_file = DEFAULT_CONFIG_FILES[0]
+
+    config = load_config(config_file)
+
+    bz_config = config['bugzilla']
+
+    trello = get_trello(config)
+    card = None
+
+    while not card:
+        try:
+            card = trello.get_card(card_id)
+        except Unauthorized:
+            trello = handle_expired_trello_tokens(config, config_file)
+
+    bug = file_trello_bug(bz_config, card)
+
+    print('Bug {} <{}> filed:'.format(bug['id'], bug['url']))
+    print('    {}'.format(bug['summary']))
+
+    while True:
+        try:
+            card.set_description('{}\n\n{}'.format(bug['url'],
+                                                   card.description))
+            break
+        except Unauthorized:
+            trello = handle_expired_trello_tokens(config, config_file)
+
     print ('Card {} updated.'.format(card.short_url))
     return 0
 
