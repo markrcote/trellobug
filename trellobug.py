@@ -11,6 +11,9 @@ from urllib.request import (
     urlopen,
 )
 
+from trello import TrelloClient
+
+
 DEFAULT_BUGZILLA_URL = 'https://bugzilla.mozilla.org/'
 DEFAULT_COMPONENT = 'General'
 DEFAULT_CONFIG_FILE = '.trello-to-bug'
@@ -23,7 +26,6 @@ story_name_with_points = re.compile('\([\d]+\)[\s]*(.*)')
 
 bug_api_url_tmpl = '{}/rest/bug'
 bug_url_tmpl = '{}/show_bug.cgi?id={}'
-card_url_tmpl = 'https://trello.com/c/{}'
 card_api_url_tmpl = 'https://api.trello.com/1/cards/{}/'
 
 
@@ -39,21 +41,43 @@ def get_bugzilla_error(e):
     return 'Error {}: {}'.format(error_dict['code'], error_dict['message'])
 
 
+def check_config(config):
+    required_options = {
+        'bugzilla': ('api_key',),
+        'trello': ('api_key', 'api_secret', 'oauth_token',
+                   'oauth_token_secret')
+    }
+
+    for section, options in required_options.items():
+        for o in options:
+            if o not in config[section]:
+                print('"{}" not present in [{}] section of config '
+                      'file.'.format(o, section))
+                return False
+
+    return True
+
+
 def main(config_file, card_id):
     config = configparser.ConfigParser()
     config.read(config_file)
 
-    bz_config = config['bugzilla']
-    if 'api_key' not in bz_config:
-        print('"api_key" not present in [bugzilla] section of config file.')
+    if not check_config(config):
         return 1
 
-    card_api_url = card_api_url_tmpl.format(card_id)
+    bz_config = config['bugzilla']
+    trello_config = config['trello']
 
-    # Python 3.5 requires the response to be explicitly converted to a string.
-    card = json.loads(urlopen(card_api_url).read().decode('utf8'))
+    trello = TrelloClient(
+        api_key=trello_config['api_key'],
+        api_secret=trello_config['api_secret'],
+        token=trello_config['oauth_token'],
+        token_secret=trello_config['oauth_token_secret']
+    )
 
-    card_name = card['name']
+    card = trello.get_card(card_id)
+
+    card_name = card.name
     m = story_name_with_points.match(card_name)
 
     if m:
@@ -69,8 +93,10 @@ def main(config_file, card_id):
         'component': bz_config.get('component', DEFAULT_COMPONENT),
         'version': bz_config.get('version', DEFAULT_VERSION),
         'summary': card_name,
-        'description': card['desc'],
-        'url': card_url_tmpl.format(card_id),
+        'description': card.description,
+        'url': card.short_url,
+        'op_sys': 'Unspecified',
+        'platform': 'Unspecified',
     }
 
     headers = {
