@@ -3,7 +3,9 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import configparser
 import json
+import os.path
 import re
+import textwrap
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import (
@@ -12,11 +14,15 @@ from urllib.request import (
 )
 
 from trello import TrelloClient
+from trello.util import create_oauth_token
 
 
 DEFAULT_BUGZILLA_URL = 'https://bugzilla.mozilla.org/'
 DEFAULT_COMPONENT = 'General'
-DEFAULT_CONFIG_FILE = '.trello-to-bug'
+DEFAULT_CONFIG_FILES = (
+    '.trello-to-bug',
+    os.path.expanduser('~/.trello-to-bug'),
+)
 DEFAULT_PRODUCT = 'Conduit'
 DEFAULT_VERSION = 'unspecified'
 
@@ -41,24 +47,79 @@ def get_bugzilla_error(e):
     return 'Error {}: {}'.format(error_dict['code'], error_dict['message'])
 
 
+def query_option(config, section, option, desc, instructions):
+    if option not in config[section]:
+        val = None
+        print('{} not found.'.format(desc))
+        print('\n'.join(textwrap.wrap(instructions)))
+
+        while not val:
+            print()
+            print('\n'.join(textwrap.wrap(
+                'You can enter one here, or use ctrl-C to quit and add it '
+                'manually to your config file as "[{}]{}":'.format(
+                    section, option)
+            )))
+            val = input()
+
+        config.set(section, option, val)
+
+
+def generate_trello_oauth_tokens(config):
+    access_token = create_oauth_token(
+        expiration='30days',
+        key=config['trello']['api_key'],
+        secret=config['trello']['api_secret'],
+        name='trello-to-bug',
+        output=False,
+    )
+    for opt in ('oauth_token', 'oauth_token_secret'):
+        config.set('trello', opt, access_token[opt])
+
+
 def check_config(config):
-    required_options = {
-        'bugzilla': ('api_key',),
-        'trello': ('api_key', 'api_secret', 'oauth_token',
-                   'oauth_token_secret')
-    }
+    if 'bugzilla' not in config:
+        config.add_section('bugzilla')
 
-    for section, options in required_options.items():
-        for o in options:
-            if o not in config[section]:
-                print('"{}" not present in [{}] section of config '
-                      'file.'.format(o, section))
-                return False
+    if 'trello' not in config:
+        config.add_section('trello')
 
-    return True
+    if 'url' not in config['bugzilla']:
+        print('Using the Bugzilla instance at {}'.format(DEFAULT_BUGZILLA_URL))
+
+    query_option(config, 'bugzilla', 'api_key', 'Bugzilla API key',
+                 'Please visit '
+                 'https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey to '
+                 'see your existing API keys or to generate a new one.')
+
+    query_option(config, 'trello', 'api_key', 'Trello API key',
+                 'You can see your API key at '
+                 'https://trello.com/1/appKey/generate in the top box.')
+
+    query_option(config, 'trello', 'api_secret', 'Trello API secret',
+                 'You can see your API secret at '
+                 'https://trello.com/app-key at the bottom under "OAuth".')
+
+    if ('oauth_token' not in config['trello'] or
+            'oauth_token_secret' not in config['trello']):
+        print('Trello OAuth tokens not found.')
+        print()
+        print('Press enter to generate.')
+        input()
+        generate_trello_oauth_tokens(config)
+        print('\n'.join(textwrap.wrap(
+            'Token generated.  It will expire in 30 days, after which this '
+            'script will generate a new one.')))
 
 
 def main(config_file, card_id):
+    if config_file is None:
+        for f in DEFAULT_CONFIG_FILES:
+            if os.path.exists(f):
+                config_file = f
+        else:
+            config_file = DEFAULT_CONFIG_FILES[0]
+
     config = configparser.ConfigParser()
     config.read(config_file)
 
@@ -151,6 +212,6 @@ if __name__ == '__main__':
     else:
         card_id = args.card_id_or_url
 
-    config_file = args.config if args.config else DEFAULT_CONFIG_FILE
+    config_file = args.config
 
     sys.exit(main(config_file, card_id))
