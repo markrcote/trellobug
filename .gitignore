@@ -1,0 +1,4 @@
+.trellobug
+build/
+dist/
+trellobug.egg-info/
