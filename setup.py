@@ -14,7 +14,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='trellobug',
-    version='0.1',
+    version='0.9',
     description='Files Bugzilla bugs from Trello cards',
     long_description=long_description,
     url='https://github.com/markrcote/trellobug/',
