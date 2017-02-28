@@ -21,8 +21,8 @@ from trello.util import create_oauth_token
 DEFAULT_BUGZILLA_URL = 'https://bugzilla.mozilla.org/'
 DEFAULT_COMPONENT = 'General'
 DEFAULT_CONFIG_FILES = (
-    '.trello-to-bug',
-    os.path.expanduser('~/.trello-to-bug'),
+    '.trellobug',
+    os.path.expanduser('~/.trellobug'),
 )
 DEFAULT_PRODUCT = 'Conduit'
 DEFAULT_VERSION = 'unspecified'
