@@ -254,20 +254,7 @@ class TrelloBug(object):
             self.write_config()
 
 
-def main(config_file, card_id):
-    if config_file is None:
-        for f in DEFAULT_CONFIG_FILES:
-            if os.path.exists(f):
-                config_file = f
-        else:
-            config_file = DEFAULT_CONFIG_FILES[0]
-
-    trello_to_bug = TrelloBug(config_file)
-    success = trello_to_bug.trello_to_bug(card_id)
-    return 0 if success else 1
-
-
-if __name__ == '__main__':
+def main():
     import argparse
     import sys
 
@@ -290,4 +277,18 @@ if __name__ == '__main__':
 
     config_file = args.config
 
-    sys.exit(main(config_file, card_id))
+    if config_file is None:
+        for f in DEFAULT_CONFIG_FILES:
+            if os.path.exists(f):
+                config_file = f
+        else:
+            config_file = DEFAULT_CONFIG_FILES[0]
+
+    trello_to_bug = TrelloBug(config_file)
+    success = trello_to_bug.trello_to_bug(card_id)
+    rc = 0 if success else 1
+    sys.exit(rc)
+
+
+if __name__ == '__main__':
+    main()
