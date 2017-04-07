@@ -278,11 +278,16 @@ def main():
     config_file = args.config
 
     if config_file is None:
+        print('Looking for config file...')
         for f in DEFAULT_CONFIG_FILES:
             if os.path.exists(f):
                 config_file = f
+                print('Found config file: {}.'.format(config_file))
+                break
         else:
             config_file = DEFAULT_CONFIG_FILES[0]
+            print('No config file found; using default: {}'.format(
+                config_file))
 
     trello_to_bug = TrelloBug(config_file)
     success = trello_to_bug.trello_to_bug(card_id)
