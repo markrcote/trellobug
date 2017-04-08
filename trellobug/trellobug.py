@@ -183,12 +183,14 @@ class TrelloBug(object):
             method='POST',
         )
 
+        print('Filing bug...')
+
         try:
             with urlopen(request) as f:
                 response = json.loads(f.read().decode('utf8'))
         except HTTPError as e:
             error = get_bugzilla_error(e)
-            print('Error sending request to Bugzilla: {}'.format(error))
+            print('Error filing bug in Bugzilla: {}'.format(error))
             return None
 
         bug = {
