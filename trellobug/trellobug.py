@@ -94,6 +94,10 @@ class TrelloBug(object):
         print ('Card {} updated.'.format(card.short_url))
         return True
 
+    @property
+    def bugzilla_url_base(self):
+        return self.bz_config.get('url', DEFAULT_BUGZILLA_URL).rstrip('/')
+
     def query_option(self, section, option, desc, instructions):
         if option not in self.config[section]:
             val = None
@@ -154,10 +158,7 @@ class TrelloBug(object):
         if m:
             card_name = m.group(1)
 
-        bugzilla_url_base = self.bz_config.get(
-            'url', DEFAULT_BUGZILLA_URL).rstrip('/')
-
-        url = bug_api_url_tmpl.format(bugzilla_url_base)
+        url = bug_api_url_tmpl.format(self.bugzilla_url_base)
 
         bug_data = {
             'api_key': self.bz_config['api_key'],
@@ -195,7 +196,7 @@ class TrelloBug(object):
 
         bug = {
             'id': response['id'],
-            'url': bug_url_tmpl.format(bugzilla_url_base, response['id']),
+            'url': bug_url_tmpl.format(self.bugzilla_url_base, response['id']),
             'summary': card_name,
         }
 
