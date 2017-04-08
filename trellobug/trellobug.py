@@ -27,11 +27,11 @@ DEFAULT_CONFIG_FILES = (
 DEFAULT_PRODUCT = 'Conduit'
 DEFAULT_VERSION = 'unspecified'
 
-
 card_path = re.compile('^/c/([^/]+)/')
 story_name_with_points = re.compile('\([\d]+\)[\s]*(.*)')
 
 bug_api_url_tmpl = '{}/rest/bug'
+bz_whoami_api_url_tmpl = '{}/rest/whoami'
 bug_url_tmpl = '{}/show_bug.cgi?id={}'
 card_api_url_tmpl = 'https://api.trello.com/1/cards/{}/'
 
@@ -77,10 +77,10 @@ class TrelloBug(object):
         self.load_trello()
 
     @check_trello_tokens
-    def trello_to_bug(self, card_id):
+    def trello_to_bug(self, card_id, assign_bug=False):
         card = self.trello.get_card(card_id)
 
-        bug = self.file_trello_bug(card)
+        bug = self.file_trello_bug(card, assign_bug)
 
         if not bug:
             return False
@@ -159,7 +159,27 @@ class TrelloBug(object):
         self.write_config()
         self.load_trello()
 
-    def file_trello_bug(self, card):
+    def get_current_user(self):
+        print('Querying current user...')
+        url = bz_whoami_api_url_tmpl.format(self.bugzilla_url_base)
+
+        request = Request(
+            url=url,
+            headers=self.bugzilla_auth_request_headers,
+            method='GET',
+        )
+
+        try:
+            with urlopen(request) as f:
+                response = json.loads(f.read().decode('utf8'))
+        except HTTPError as e:
+            error = get_bugzilla_error(e)
+            print('Error querying current user on Bugzilla: {}'.format(error))
+            return None
+
+        return response['name']
+
+    def file_trello_bug(self, card, assign_bug):
         card_name = card.name
         m = story_name_with_points.match(card_name)
 
@@ -178,6 +198,15 @@ class TrelloBug(object):
             'op_sys': 'Unspecified',
             'platform': 'Unspecified',
         }
+
+        if assign_bug:
+            current_user = self.get_current_user()
+
+            if not current_user:
+                return None
+
+            bug_data['status'] = 'ASSIGNED'
+            bug_data['assigned_to'] = current_user
 
         request = Request(
             url=url,
@@ -268,6 +297,11 @@ def main():
     )
     parser.add_argument('card_id_or_url')
     parser.add_argument('--config')
+    parser.add_argument(
+        '--assign',
+        action='store_true',
+        help='Assign bug to self'
+    )
     args = parser.parse_args()
 
     if '/' in args.card_id_or_url:
@@ -295,7 +329,7 @@ def main():
                 config_file))
 
     trello_to_bug = TrelloBug(config_file)
-    success = trello_to_bug.trello_to_bug(card_id)
+    success = trello_to_bug.trello_to_bug(card_id, args.assign)
     rc = 0 if success else 1
     sys.exit(rc)
 

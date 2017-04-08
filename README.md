@@ -24,3 +24,8 @@ Here are all the options:
     api_secret: Trello API secret
     oauth_token: Trello OAuth token
     oauth_token_secret: Trello OAuth token secret
+
+If provided, the `--assign` option will assign the bug to the current user
+(as identified by the provided Bugzilla API key) and set the status to
+`ASSIGNED`.  Otherwise, the bug will be unassigned and set to the default
+status.
