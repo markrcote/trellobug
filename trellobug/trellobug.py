@@ -118,6 +118,14 @@ class TrelloBug(object):
 
         return False
 
+    @property
+    def bugzilla_auth_request_headers(self):
+        return {
+            'Accept': 'application/json',
+            'Content-type': 'application/json',
+            'X-Bugzilla-API-Key': self.bz_config['api_key'],
+        }
+
     def generate_trello_oauth_tokens(self):
         print('Press enter to generate.')
         input()
@@ -161,7 +169,6 @@ class TrelloBug(object):
         url = bug_api_url_tmpl.format(self.bugzilla_url_base)
 
         bug_data = {
-            'api_key': self.bz_config['api_key'],
             'product': self.bz_config.get('product', DEFAULT_PRODUCT),
             'component': self.bz_config.get('component', DEFAULT_COMPONENT),
             'version': self.bz_config.get('version', DEFAULT_VERSION),
@@ -172,15 +179,10 @@ class TrelloBug(object):
             'platform': 'Unspecified',
         }
 
-        headers = {
-            'Accept': 'application/json',
-            'Content-type': 'application/json',
-        }
-
         request = Request(
             url=url,
             data=json.dumps(bug_data).encode('utf8'),
-            headers=headers,
+            headers=self.bugzilla_auth_request_headers,
             method='POST',
         )
 
