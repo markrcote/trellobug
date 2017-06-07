@@ -68,8 +68,10 @@ def check_trello_tokens(func):
 
 class TrelloBug(object):
 
-    def __init__(self, config_file):
+    def __init__(self, config_file, bz_product=None, bz_component=None):
         self.config_file = config_file
+        self._bz_product = bz_product
+        self._bz_component = bz_component
         self.config = None
         self.bz_config = None
         self.trello_config = None
@@ -97,6 +99,16 @@ class TrelloBug(object):
     @property
     def bugzilla_url_base(self):
         return self.bz_config.get('url', DEFAULT_BUGZILLA_URL).rstrip('/')
+
+    @property
+    def bz_product(self):
+        return (self._bz_product or
+                self.bz_config.get('product', DEFAULT_PRODUCT))
+
+    @property
+    def bz_component(self):
+        return (self._bz_component or
+                self.bz_config.get('component', DEFAULT_COMPONENT))
 
     def query_option(self, section, option, desc, instructions):
         if option not in self.config[section]:
@@ -189,8 +201,8 @@ class TrelloBug(object):
         url = bug_api_url_tmpl.format(self.bugzilla_url_base)
 
         bug_data = {
-            'product': self.bz_config.get('product', DEFAULT_PRODUCT),
-            'component': self.bz_config.get('component', DEFAULT_COMPONENT),
+            'product': self.bz_product,
+            'component': self.bz_component,
             'version': self.bz_config.get('version', DEFAULT_VERSION),
             'summary': card_name,
             'description': card.description,
@@ -296,11 +308,22 @@ def main():
         description='File a bug based on a Trello card.'
     )
     parser.add_argument('card_id_or_url')
-    parser.add_argument('--config')
+    parser.add_argument(
+        '--config',
+        help='Specify config file to load',
+    )
     parser.add_argument(
         '--assign',
         action='store_true',
         help='Assign bug to self'
+    )
+    parser.add_argument(
+        '--product',
+        help='Bugzilla product in which to file bug; overrides config file',
+    )
+    parser.add_argument(
+        '--component',
+        help='Bugzilla component in which to file bug; overrides config file',
     )
     args = parser.parse_args()
 
@@ -328,7 +351,7 @@ def main():
             print('No config file found; using default: {}'.format(
                 config_file))
 
-    trello_to_bug = TrelloBug(config_file)
+    trello_to_bug = TrelloBug(config_file, args.product, args.component)
     success = trello_to_bug.trello_to_bug(card_id, args.assign)
     rc = 0 if success else 1
     sys.exit(rc)
