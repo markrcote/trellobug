@@ -68,10 +68,12 @@ def check_trello_tokens(func):
 
 class TrelloBug(object):
 
-    def __init__(self, config_file, bz_product=None, bz_component=None):
+    def __init__(self, config_file, bz_product=None, bz_component=None,
+                 bz_version=None):
         self.config_file = config_file
         self._bz_product = bz_product
         self._bz_component = bz_component
+        self._bz_version = bz_version
         self.config = None
         self.bz_config = None
         self.trello_config = None
@@ -109,6 +111,11 @@ class TrelloBug(object):
     def bz_component(self):
         return (self._bz_component or
                 self.bz_config.get('component', DEFAULT_COMPONENT))
+
+    @property
+    def bz_version(self):
+        return (self._bz_version or
+                self.bz_config.get('version', DEFAULT_VERSION))
 
     def query_option(self, section, option, desc, instructions):
         if option not in self.config[section]:
@@ -203,7 +210,7 @@ class TrelloBug(object):
         bug_data = {
             'product': self.bz_product,
             'component': self.bz_component,
-            'version': self.bz_config.get('version', DEFAULT_VERSION),
+            'version': self.bz_version,
             'summary': card_name,
             'description': card.description,
             'url': card.short_url,
@@ -325,6 +332,11 @@ def main():
         '--component',
         help='Bugzilla component in which to file bug; overrides config file',
     )
+    parser.add_argument(
+        '--version',
+        help='Value for the version field of the new bug; overrides config '
+        'file',
+    )
     args = parser.parse_args()
 
     if '/' in args.card_id_or_url:
@@ -351,7 +363,8 @@ def main():
             print('No config file found; using default: {}'.format(
                 config_file))
 
-    trello_to_bug = TrelloBug(config_file, args.product, args.component)
+    trello_to_bug = TrelloBug(config_file, args.product, args.component,
+                              args.version)
     success = trello_to_bug.trello_to_bug(card_id, args.assign)
     rc = 0 if success else 1
     sys.exit(rc)
