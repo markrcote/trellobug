@@ -38,7 +38,7 @@ setup(
         'py-trello==0.9.0',
         'python-dateutil==2.6.0',
         'pytz==2016.10',
-        'requests==2.13.0',
+        'requests==2.21.0',
         'requests-oauthlib==0.8.0',
         'six==1.10.0',
     ],
